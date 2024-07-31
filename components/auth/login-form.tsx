@@ -34,6 +34,7 @@ export const LoginForm = () => {
 		searchParams.get('error') === 'OAuthAccountNotLinked'
 			? 'Email already in use with different provider!'
 			: '';
+	const [showTwoFactor, setShowTwoFactor] = useState(false);
 
 	const form = useForm<z.infer<typeof LoginSchema>>({
 		resolver: zodResolver(LoginSchema),
@@ -46,10 +47,22 @@ export const LoginForm = () => {
 		setSuccess('');
 		setError('');
 		startTransition(() => {
-			login(values).then((data) => {
-				setSuccess(data?.success);
-				setError(data?.error);
-			});
+			login(values)
+				.then((data) => {
+					if (data?.error) {
+						form.reset();
+						setError(data.error);
+					}
+					if (data?.success) {
+						form.reset();
+						setSuccess(data.success);
+					}
+
+					if (data?.twoFactor) {
+						setShowTwoFactor(true);
+					}
+				})
+				.catch(() => setError('Something Went Wrong!'));
 		});
 	};
 
@@ -66,67 +79,92 @@ export const LoginForm = () => {
 			<Form {...form}>
 				<form onSubmit={form.handleSubmit(onSubmit)} className='space-y-6'>
 					<div className='space-y-4'>
-						<FormField
-							control={form.control}
-							name='email'
-							render={({ field }) => (
-								<FormItem>
-									<FormLabel>Email</FormLabel>
-									<FormControl>
-										<Input
-											{...field}
-											placeholder='john.doe@example.com'
-											type='email'
-											disabled={isPending}
-										/>
-									</FormControl>
-									<FormMessage />
-								</FormItem>
-							)}
-						/>
-						<FormField
-							control={form.control}
-							name='password'
-							render={({ field }) => (
-								<FormItem>
-									<FormLabel>Password</FormLabel>
-									<FormControl>
-										<div className='relative'>
-											<Input
-												className='pr-0'
-												{...field}
-												placeholder='*******'
-												type={showPassword ? 'text' : 'password'}
-												disabled={isPending}
-											/>
+						{showTwoFactor && (
+							<>
+								<FormField
+									control={form.control}
+									name='code'
+									render={({ field }) => (
+										<FormItem>
+											<FormLabel>Two Factor Code</FormLabel>
+											<FormControl>
+												<Input
+													{...field}
+													placeholder='123456'
+													disabled={isPending}
+												/>
+											</FormControl>
+											<FormMessage />
+										</FormItem>
+									)}
+								/>
+							</>
+						)}
+						{!showTwoFactor && (
+							<>
+								<FormField
+									control={form.control}
+									name='email'
+									render={({ field }) => (
+										<FormItem>
+											<FormLabel>Email</FormLabel>
+											<FormControl>
+												<Input
+													{...field}
+													placeholder='john.doe@example.com'
+													type='email'
+													disabled={isPending}
+												/>
+											</FormControl>
+											<FormMessage />
+										</FormItem>
+									)}
+								/>
+								<FormField
+									control={form.control}
+									name='password'
+									render={({ field }) => (
+										<FormItem>
+											<FormLabel>Password</FormLabel>
+											<FormControl>
+												<div className='relative'>
+													<Input
+														className='pr-0'
+														{...field}
+														placeholder='*******'
+														type={showPassword ? 'text' : 'password'}
+														disabled={isPending}
+													/>
+													<Button
+														variant='outline'
+														type='button'
+														onClick={togglePasswordVisibility}
+														className='absolute pr-1 right-2.5 top-1/2 transform -translate-y-1/2 bg-none border-none cursor-pointer '
+														disabled={isPending}
+													>
+														{showPassword ? <FaEye /> : <FaEyeSlash />}
+													</Button>
+												</div>
+											</FormControl>
 											<Button
-												variant='outline'
-												type='button'
-												onClick={togglePasswordVisibility}
-												className='absolute pr-1 right-2.5 top-1/2 transform -translate-y-1/2 bg-none border-none cursor-pointer '
-												disabled={isPending}
+												size='sm'
+												variant='link'
+												asChild
+												className='px-0 font-normal'
 											>
-												{showPassword ? <FaEye /> : <FaEyeSlash />}
+												<Link href='/auth/reset'>Forgot Password?</Link>
 											</Button>
-										</div>
-									</FormControl>
-									<Button
-										size='sm'
-										variant='link'
-										asChild
-										className='px-0 font-normal'
-									>
-										<Link href='/auth/reset'>Forgot Password?</Link>
-									</Button>
-									<FormMessage />
-								</FormItem>
-							)}
-						/>
+											<FormMessage />
+										</FormItem>
+									)}
+								/>
+							</>
+						)}
 					</div>
 					<FormError message={error || urlError} />
 					<FormSuccess message={success} />
 					<Button type='submit' className='w-full' disabled={isPending}>
-						Login
+						{showTwoFactor ? 'Submit' : 'Login'}
 					</Button>
 				</form>
 			</Form>
