@@ -1,37 +1,32 @@
+import { NextRequest, NextResponse } from 'next/server';
 import NextAuth from 'next-auth';
-import authConfig from './auth.config';
+import authConfig from '@/auth.config';
 import {
-	apiAuthPrefix,
-	publicRoutes,
-	authRoutes,
 	DEFAULT_LOGIN_REDIRECT,
-} from './routes';
+	apiAuthPrefix,
+	authRoutes,
+	publicRoutes,
+} from '@/routes';
 
-// Use only one of the two middleware options below
-// 1. Use middleware directly
-// export const { auth: middleware } = NextAuth(authConfig)
-
-// 2. Wrapped middleware option
 const { auth } = NextAuth(authConfig);
 
-export default auth((req) => {
-	// req.auth
+export default auth((req: NextRequest) => {
 	const { nextUrl } = req;
-	const isLoggedIn = !!req.auth;
+	const isLoggedIn = !!req.cookies.get('next-auth.session-token'); // Assuming you're using cookies for session
 
 	const isApiAuthRoute = nextUrl.pathname.startsWith(apiAuthPrefix);
 	const isPublicRoute = publicRoutes.includes(nextUrl.pathname);
 	const isAuthRoute = authRoutes.includes(nextUrl.pathname);
 
 	if (isApiAuthRoute) {
-		return null;
+		return NextResponse.next();
 	}
 
 	if (isAuthRoute) {
 		if (isLoggedIn) {
-			return Response.redirect(new URL(DEFAULT_LOGIN_REDIRECT, nextUrl));
+			return NextResponse.redirect(new URL(DEFAULT_LOGIN_REDIRECT, nextUrl));
 		}
-		return null;
+		return NextResponse.next();
 	}
 
 	if (!isLoggedIn && !isPublicRoute) {
@@ -41,11 +36,13 @@ export default auth((req) => {
 		}
 
 		const encodedCallbackUrl = encodeURIComponent(callbackUrl);
-		return Response.redirect(
-			new URL(`auth/login?$callbackUrl=${encodedCallbackUrl}`, nextUrl)
+
+		return NextResponse.redirect(
+			new URL(`/auth/login?callbackUrl=${encodedCallbackUrl}`, nextUrl)
 		);
 	}
-	return null;
+
+	return NextResponse.next();
 });
 
 // Optionally, don't invoke Middleware on some paths
