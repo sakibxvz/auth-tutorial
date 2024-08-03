@@ -1,9 +1,12 @@
 'use server';
 
-import { getUserById } from '@/data/user';
+import { getUserByEmail, getUserById } from '@/data/user';
 import { currentUser } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { sendVerificationEmail } from '@/lib/mail';
+import { generateVerificationToken } from '@/lib/tokens';
 import { SettingsSchema } from '@/schemas';
+import bcrypt from 'bcryptjs';
 import * as z from 'zod';
 
 export const settings = async (values: z.infer<typeof SettingsSchema>) => {
@@ -14,8 +17,54 @@ export const settings = async (values: z.infer<typeof SettingsSchema>) => {
 	}
 
 	const dbUser = await getUserById(user.id);
+
 	if (!dbUser) {
 		return { error: 'Unauthorized' };
+	}
+	if (user.isOAuth) {
+		values.email = undefined;
+		values.password = undefined;
+		values.newPassword = undefined;
+		values.isTwoFactorEnable = undefined;
+	}
+
+	if (values.email && values.email !== user.email) {
+		const existingUser = await getUserByEmail(values.email);
+
+		if (existingUser && existingUser.id !== user.id) {
+			return { error: 'Email alrwasy in use!' };
+		}
+		const verificationToken = await generateVerificationToken(values.email);
+
+		await sendVerificationEmail(
+			verificationToken.email,
+			verificationToken.token
+		);
+		return { success: 'Verification token sent!' };
+	}
+
+	if (values.password && values.newPassword && dbUser.password) {
+		const usingPrevPassword = await bcrypt.compare(
+			values.newPassword,
+			dbUser.password
+		);
+
+		const passwordsMatch = await bcrypt.compare(
+			values.password,
+			dbUser.password
+		);
+
+		if (!passwordsMatch) {
+			return { error: 'Incorrect Password!' };
+		}
+
+		if (usingPrevPassword) {
+			return { error: `Can't use Old Password!` };
+		}
+
+		const hashedPassword = await bcrypt.hash(values.newPassword, 10);
+		values.password = hashedPassword;
+		values.newPassword = undefined;
 	}
 
 	await db.user.update({
